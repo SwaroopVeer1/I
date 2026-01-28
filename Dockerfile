@@ -22,13 +22,19 @@ RUN pip install \
     xformers==0.0.23 runpod numpy==1.26.3 scipy \
     triton huggingface-hub hf_transfer setuptools Pillow
 
+
+
 # Copy code
 COPY download_weights.py schemas.py handler.py test_input.json /app/
+COPY weights /weights
 WORKDIR /app
+
+# (No download step anymore!)
+# RUN python download_weights.py  <-- REMOVE this line
 
 # Download SDXL Turbo weights to /weights
 RUN mkdir -p /weights
-RUN python download_weights.py
+
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1

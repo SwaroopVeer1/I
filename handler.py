@@ -23,32 +23,30 @@ class ModelHandler:
     def __init__(self):
         """Initialize the SDXL Turbo pipeline."""
         self.pipe = None
-        self.load_model()
+        self.load_model()  # call the load_model method
 
     def load_model(self):
         """Load the SDXL Turbo model from local weights with memory optimizations."""
         print("🚀 Loading SDXL Turbo model...")
 
-        MODEL_DIR = "/weights"  # <- pre-downloaded model location
-
         try:
-            # Load pipeline from local folder only
+            # <-- Add your line here
             self.pipe = AutoPipelineForText2Image.from_pretrained(
-                MODEL_DIR,
+                "/weights",               # path to pre-downloaded weights
                 torch_dtype=torch.float16,
                 variant="fp16",
                 use_safetensors=True,
-                local_files_only=True  # ensures no network download
+                local_files_only=True      # ensures no network download
             )
 
+            # Move to GPU if available
             if torch.cuda.is_available():
                 self.pipe.to("cuda")
-                # Memory optimizations
                 self.pipe.enable_xformers_memory_efficient_attention()
                 self.pipe.enable_attention_slicing()
-                print("✅ Model loaded successfully on GPU with memory optimizations!")
+                print("✅ Model loaded successfully on GPU!")
             else:
-                print("⚠️ GPU not available, running on CPU (may be slow)")
+                print("⚠️ GPU not available, running on CPU")
 
         except Exception as e:
             print(f"❌ Error loading model: {str(e)}")

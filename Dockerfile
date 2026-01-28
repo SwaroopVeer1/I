@@ -22,7 +22,8 @@ RUN pip install \
     xformers==0.0.23 runpod numpy==1.26.3 scipy \
     triton huggingface-hub hf_transfer setuptools Pillow
 
-RUN python 1.py
+RUN python -c "from diffusers import AutoPipelineForText2Image; AutoPipelineForText2Image.from_pretrained('stabilityai/sdxl-turbo', cache_dir='./weights', torch_dtype='auto')"
+
 
 
 

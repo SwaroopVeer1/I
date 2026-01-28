@@ -7,11 +7,10 @@ import os
 import base64
 import io
 import time
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 
 import torch
 import runpod
-from runpod.serverless.utils import rp_upload, rp_cleanup
 from runpod.serverless.utils.rp_validator import validate
 
 from diffusers import AutoPipelineForText2Image
@@ -26,42 +25,37 @@ class ModelHandler:
         self.pipe = None
         self.load_model()
 
-def load_model(self):
-    """Load the SDXL Turbo model from local weights with memory optimizations."""
-    print("🚀 Loading SDXL Turbo model...")
+    def load_model(self):
+        """Load the SDXL Turbo model from local weights with memory optimizations."""
+        print("🚀 Loading SDXL Turbo model...")
 
-    MODEL_DIR = "/weights"
+        MODEL_DIR = "/weights"  # <- pre-downloaded model location
 
-    try:
-        # Load the pipeline with FP16 for lower VRAM usage
-        self.pipe = AutoPipelineForText2Image.from_pretrained(
-            MODEL_DIR,
-            torch_dtype=torch.float16,
-            variant="fp16",
-            use_safetensors=True,
-            local_files_only=True
-        )
+        try:
+            # Load pipeline from local folder only
+            self.pipe = AutoPipelineForText2Image.from_pretrained(
+                MODEL_DIR,
+                torch_dtype=torch.float16,
+                variant="fp16",
+                use_safetensors=True,
+                local_files_only=True  # ensures no network download
+            )
 
-        if torch.cuda.is_available():
-            self.pipe.to("cuda")
-            # Enable memory-efficient attention
-            self.pipe.enable_xformers_memory_efficient_attention()
-            # Enable attention slicing to further reduce memory
-            self.pipe.enable_attention_slicing()
-            print("✅ Model loaded successfully on GPU with memory optimizations!")
-        else:
-            print("⚠️ GPU not available, running on CPU (may be slow)")
+            if torch.cuda.is_available():
+                self.pipe.to("cuda")
+                # Memory optimizations
+                self.pipe.enable_xformers_memory_efficient_attention()
+                self.pipe.enable_attention_slicing()
+                print("✅ Model loaded successfully on GPU with memory optimizations!")
+            else:
+                print("⚠️ GPU not available, running on CPU (may be slow)")
 
-    except Exception as e:
-        print(f"❌ Error loading model: {str(e)}")
-        raise RuntimeError(f"Failed to load SDXL Turbo model: {str(e)}")
-
-
+        except Exception as e:
+            print(f"❌ Error loading model: {str(e)}")
+            raise RuntimeError(f"Failed to load SDXL Turbo model: {str(e)}")
 
     def generate_image(self, job_input: Dict[str, Any]) -> Dict[str, Any]:
         """Generate image using SDXL Turbo."""
-
-        # Extract parameters
         prompt = job_input.get("prompt")
         negative_prompt = job_input.get("negative_prompt")
         height = job_input.get("height", 512)
@@ -102,7 +96,6 @@ def load_model(self):
             # Process images
             images_data = []
             for i, image in enumerate(result.images):
-                # Convert to base64
                 buffer = io.BytesIO()
                 image.save(buffer, format="PNG")
                 image_bytes = buffer.getvalue()
@@ -136,23 +129,15 @@ model_handler = ModelHandler()
 
 
 def handler(job):
-    """
-    Handler function for RunPod serverless.
-    """
+    """Handler function for RunPod serverless."""
     try:
-        # Validate input
         job_input = job["input"]
-
-        # Validate against schema
         validated_input = validate(job_input, INPUT_SCHEMA)
         if "errors" in validated_input:
             return {"error": f"Input validation failed: {validated_input['errors']}"}
 
         validated_data = validated_input["validated_input"]
-
-        # Generate image
         result = model_handler.generate_image(validated_data)
-
         return result
 
     except Exception as e:

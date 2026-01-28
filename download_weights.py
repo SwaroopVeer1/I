@@ -3,6 +3,10 @@ from diffusers import AutoPipelineForText2Image
 import torch
 import os
 
+# Copy local weights into container
+COPY weights /weights
+
+
 MODEL_DIR = "/weights"
 os.makedirs(MODEL_DIR, exist_ok=True)
 

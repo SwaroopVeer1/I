@@ -1,47 +1,21 @@
-# Base image with CUDA 12.1
+# Use CUDA runtime base
 FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
+# Install Python
 ENV DEBIAN_FRONTEND=noninteractive
-
-# Install Python 3.11, pip, git, wget
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3.11 python3.11-venv python3-pip git wget \
+    python3.11 python3.11-venv python3-pip git \
     && rm -rf /var/lib/apt/lists/*
 
-# Create virtual environment
-RUN python3.11 -m venv /.venv
-ENV PATH="/.venv/bin:${PATH}"
+# Install dependencies
+RUN pip install --upgrade torch diffusers transformers accelerate safetensors xformers runpod Pillow
 
-# Upgrade pip
-RUN pip install --upgrade pip
-
-# Install optimized dependencies
-RUN pip install \
-    torch --extra-index-url https://download.pytorch.org/whl/cu121 \
-    diffusers transformers accelerate safetensors \
-    xformers==0.0.23 runpod numpy==1.26.3 scipy \
-    triton huggingface-hub hf_transfer setuptools Pillow
-
-RUN python -c "from diffusers import AutoPipelineForText2Image; AutoPipelineForText2Image.from_pretrained('stabilityai/sdxl-turbo', cache_dir='./weights', torch_dtype='auto')"
-
-
-
-
-
-# Copy code
-COPY download_weights.py schemas.py handler.py test_input.json /app/
-COPY weights /weights
+# Copy worker code
+COPY handler.py schemas.py /app/
 WORKDIR /app
 
-# (No download step anymore!)
-# RUN python download_weights.py  <-- REMOVE this line
-
-# Download SDXL Turbo weights to /weights
+# Create cache folder for model at runtime
 RUN mkdir -p /weights
 
-
-# Environment variables
-ENV PYTHONUNBUFFERED=1
-
-# Start the handler
+# Run the serverless worker
 CMD ["python", "-u", "handler.py"]

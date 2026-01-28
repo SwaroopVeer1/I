@@ -1,42 +1,60 @@
-"""
-Download and cache the SDXL Turbo model weights.
-"""
-
 import os
+import base64
+from io import BytesIO
+
 import torch
-from diffusers import AutoPipelineForText2Image
+import runpod
+from diffusers import FluxPipeline
+from PIL import Image
 
+MODEL_ID = "black-forest-labs/FLUX.1-dev"
 
-def download_models():
-    """Download and cache SDXL Turbo model."""
-    print("Downloading SDXL Turbo model...")
+# ---- Load model ONCE at container startup ----
+print("🚀 Loading FLUX model...")
 
-    # Create cache directory if it doesn't exist
-    cache_dir = os.environ.get("HF_HOME", "/workspace/.cache/huggingface")
-    os.makedirs(cache_dir, exist_ok=True)
+pipe = FluxPipeline.from_pretrained(
+    MODEL_ID,
+    torch_dtype=torch.bfloat16,
+    token=os.environ["HF_TOKEN"]  # REQUIRED
+).to("cuda")
 
-    try:
-        # Download SDXL Turbo pipeline
-        pipe = AutoPipelineForText2Image.from_pretrained(
-            "stabilityai/sdxl-turbo",
-            torch_dtype=torch.float16,
-            variant="fp16",
-            use_safetensors=True,
-        )
+print("✅ FLUX model loaded and ready!")
 
-        print("✅ SDXL Turbo model downloaded successfully!")
+# ---- RunPod handler ----
+def handler(event):
+    """
+    Expected input:
+    {
+        "prompt": "A cinematic cyberpunk city at night",
+        "steps": 30,
+        "seed": 42
+    }
+    """
 
-        # Test loading to GPU if available
-        if torch.cuda.is_available():
-            pipe.to("cuda")
-            print("✅ Model successfully loaded to GPU!")
-        else:
-            print("⚠️  GPU not available, model will run on CPU")
+    input_data = event.get("input", {})
 
-    except Exception as e:
-        print(f"❌ Error downloading model: {str(e)}")
-        raise
+    prompt = input_data.get("prompt", "A futuristic city")
+    steps = input_data.get("steps", 30)
+    seed = input_data.get("seed", None)
 
+    generator = None
+    if seed is not None:
+        generator = torch.Generator("cuda").manual_seed(seed)
 
-if __name__ == "__main__":
-    download_models()
+    image = pipe(
+        prompt=prompt,
+        num_inference_steps=steps,
+        generator=generator
+    ).images[0]
+
+    # Convert image → base64
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    img_base64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+    return {
+        "image_base64": img_base64
+    }
+
+# ---- Start RunPod serverless ----
+runpod.serverless.start({"handler": handler})
